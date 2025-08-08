@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.9.5/brython.min.js"></script>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;            
+        }
+        .container {
+            display: flex;
+            position: relative; 
+            flex: 1;
+            font-family: monospace;
+            font-size: 16px; /* Match font size for consistency */
+            margin: 0px;
+            padding: 0px;    
+        }
+        .line-numbers {
+            background: #ffffff;
+            border-right: 1px solid #ddd;
+            text-align: right;
+            padding: 1px;
+            margin:0px;
+            box-sizing: border-box;
+            overflow: hidden;
+            white-space: pre;
+            font-size: 16px; /* Match the font size of the overlay */
+            line-height: 1.5; /* Match line height with the overlay */
+        }
+        .textarea-container {
+            flex: 1;
+            position: relative;
+            margin: 0;
+            padding: 0;             
+        }
+        textarea {
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box; /* Include padding and border in element's total width and height */
+
+            border: none;
+            margin: 0; /* Remove default margin */
+            padding: 0; /* Remove default padding */
+            font-size: 16px; /* Match the font size of the overlay */
+            line-height: 1.5; /* Match line height with the overlay */
+            overflow: auto; 
+            background-color: #ffffff; /* Default background color */
+            color: #000000; /* Default text color */
+            caret-color: black;
+            z-index: 1;
+        }
+
+        .lines-active {
+            background-image: 
+            linear-gradient(to right, 
+                            transparent 0%, 
+                            transparent calc(100% / 40), 
+                            rgba(61,61,61,255) calc(100% / 40), 
+                            transparent calc(100% / 40 + 1px)
+                            );
+                            
+            background-size: 40px 100%;       
+            margin: 0; /* Remove default margin */
+            padding: 0; /* Remove default padding */                       
+            }
+
+
+
+        .overlay {
+            position: absolute; 
+            overflow: auto; 
+            
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            font-family: monospace;
+            font-size: 16px; /* Match the font size of the textarea */
+            line-height: 1.5; /* Match the line height of the textarea */
+            padding: 0; /* Match padding with the textarea */
+            margin: 0; /* Match margin with the textarea */
+            z-index: 0;
+            white-space: pre-wrap; /* Preserve whitespace formatting */
+            overflow-wrap: break-word;
+        }
+
+
+
+        .controls {
+            height: 40px; /* Height for the buttons */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f4f4f4;
+            margin: 0px;
+            padding: 0px;            
+
+        }
+        .controls button {
+            margin: 5px;
+            padding: 0px;
+            font-size: 1px;
+            cursor: pointer;
+        }
+
+
+        .round-button {
+            display:block;
+            width:30px;
+            height:30px;
+            line-height:30px;
+            border: 1px solid #000000;
+            border-radius: 100%;
+            color:#f4f4f4;
+            text-align:center;
+            text-decoration:none;
+            background: #000000;
+            font-size:1px;
+            font-weight:bold;
+            margin: 0px;
+            padding: 0px;    
+        }
+        .round-button:hover {
+            background: #f4f4f4;
+        }
+
+
+
+        #console-output {
+            white-space: pre-wrap;
+            background: #111;
+            color: #0f0;
+            padding: 10px;
+            height: 150px; /* fixed height */
+            overflow-y: auto;
+            font-family: monospace;
+            flex-shrink: 0; /* do not shrink when resizing */
+        }        
+
+    </style>
+</head>
+<body onload="brython()">
+
+
+
+
+    <div class="container">
+        <div class="line-numbers" id="line-numbers"></div>
+        <div class="textarea-container">
+            <div class="overlay" id="overlay"></div>
+            <textarea id="txt_py"></textarea>
+        </div>
+    </div>
+    <script type="text/python">
+        from browser import document, html, window
+        is_black_background = True
+
+
+        def update_overlay(event=None):
+            textarea = document["txt_py"]
+            overlay = document["overlay"]
+            line_numbers = document['line-numbers']
+
+            # Calculate the number of lines in the textarea
+            num_lines = len(textarea.value.split('\n'))
+            
+            # Generate line numbers with consistent height
+            line_height = 1.5 * 16  # Line height = line-height * font-size (adjust this based on actual values)
+            number_lines = '\n'.join(f'{i + 1}' for i in range(num_lines))
+            
+            # Set the line numbers text content
+            line_numbers.textContent = number_lines
+            
+            # Update the height of the line numbers div to match the textarea
+            line_numbers.style.height = f'{textarea.scrollHeight}px'
+            line_numbers.style.lineHeight = f'{line_height}px'
+
+            text = textarea.value
+            overlay.clear()
+
+
+
+
+
+
+
+
+
+
+            # Words to colorize
+            keywords = {
+                "class": "#2751b3", 
+                "def": "#2751b3", 
+                "lambda": "#2751b3",
+
+
+                #BLUES
+                "None":"#2751b3",  
+                "True":"#2751b3", 
+                "False":"#2751b3", 
+                "and":"#2751b3", 
+                "or":"#2751b3", 
+                "is":"#2751b3", 
+                "not":"#2751b3", 
+                "global":"#2751b3", 
+                "self":"#67c5f8", 
+                
+                
+
+
+                #PURPLE-ISH
+                "return": "#ce72c0",
+                "from":"#ce72c0", 
+                "import":"#ce72c0", 
+                "as":"#ce72c0", 
+                "pass":"#ce72c0", 
+                "break":"#ce72c0",
+                "continue": "#ce72c0",  
+                "if":"#ce72c0", 
+                "elif":"#ce72c0", 
+                "else":"#ce72c0",
+                "try":"#ce72c0", 
+                "except":"#ce72c0", 
+                "raise":"#ce72c0", 
+                "finally":"#ce72c0",
+                "while":"#ce72c0", 
+                "for":"#ce72c0", 
+                "with":"#ce72c0", 
+                "yield":"#ce72c0", 
+                "in":"#ce72c0",
+                
+
+
+                #GREENS
+                "bool": "#20ac8b",
+                "bytearray": "#20ac8b",
+                "bytes": "#20ac8b",
+                "classmethod": "#20ac8b",
+                "complex": "#20ac8b",
+                "dict": "#20ac8b",
+                "enumerate": "#20ac8b",
+                "filter": "#20ac8b",
+                "float": "#20ac8b",
+                "frozenset": "#20ac8b",
+                "int": "#20ac8b",
+                "list": "#20ac8b",
+                "map": "#20ac8b",
+                "memoryview": "#20ac8b",
+                "object": "#20ac8b",
+                "property": "#20ac8b",
+                "range": "#20ac8b",
+                "reversed": "#20ac8b",
+                "slice": "#20ac8b",
+                "staticmethod": "#20ac8b",
+                "str": "#20ac8b",
+                "super": "#20ac8b",
+                "set": "#20ac8b",
+                "tuple": "#20ac8b",
+                "type": "#20ac8b",
+                "zip": "#20ac8b",
+
+
+                #YELLOWS
+
+                "__init__":"#dbe726", 
+                "isinstance":"#dbe726", 
+                "max":"#dbe726",
+                "min":"#dbe726",
+                "open":"#dbe726",
+                "dir":"#dbe726",
+                "divmod":"#dbe726",
+                "delattr":"#dbe726",
+                "compile":"#dbe726",
+                "abs":"#dbe726",
+                "aiter":"#dbe726",
+                "all":"#dbe726",
+                "anext":"#dbe726",
+                "any":"#dbe726",
+                "ascii":"#dbe726",
+                "breakpoint":"#dbe726",
+                "callable":"#dbe726",
+                "chr":"#dbe726",
+                "bin":"#dbe726",
+                "eval":"#dbe726",
+                "exec":"#dbe726",
+                "format":"#dbe726",
+                "getattr":"#dbe726",
+                "globals":"#dbe726",
+                "hasattr":"#dbe726",
+                "hash":"#dbe726",
+                "help":"#dbe726",
+                "hex":"#dbe726",
+                "id":"#dbe726",
+                "input":"#dbe726",
+                "isinstance":"#dbe726",
+                "issubclass":"#dbe726",
+                "iter":"#dbe726",
+                "len":"#dbe726",
+                "locals":"#dbe726",
+                "max":"#dbe726",
+                "min":"#dbe726",
+                "next":"#dbe726",
+                "oct":"#dbe726",
+                "open":"#dbe726",
+                "ord":"#dbe726",
+                "pow":"#dbe726",
+                "print":"#dbe726",
+                "repr":"#dbe726",
+                "round":"#dbe726",
+                "vars":"#dbe726",
+                "sum":"#dbe726",
+                "sorted":"#dbe726",
+                "setattr":"#dbe726",
+                "__import__":"#dbe726",
+                
+
+
+               
+                #ERRORS and WARNINGS
+                "AssertionError": "#e49627",
+                "AttributeError": "#e49627",
+                "ArithmeticError": "#e49627",
+                
+                "BytesWarning": "#e49627",
+                "BaseExceptionGroup": "#e49627",
+                "BrokenPipeError": "#e49627",
+                "BlockingIOError": "#e49627",
+                "BufferError": "#e49627",
+                "BaseException": "#e49627",
+                
+                "ChildProcessError": "#e49627",
+                "ConnectionError": "#e49627",
+                "ConnectionAbortedError": "#e49627",
+                "ConnectionRefusedError": "#e49627",
+                "ConnectionResetError": "#e49627",
+                
+                "DeprecationWarning": "#e49627",
+                
+                "EOFError": "#e49627",
+                "ExceptionGroup": "#e49627",
+                "EncodingWarning": "#e49627",
+                "EnvironmentError": "#e49627",
+                "Exception": "#e49627",
+                
+         
+                "SystemExit": "#e49627",
+                "SyntaxWarning": "#e49627",
+                
+                "TabError": "#e49627",
+                "TypeError": "#e49627",
+                "TimeoutError": "#e49627",
+                
+                "UnboundLocalError": "#e49627",
+                "UnicodeError": "#e49627",
+                "UnicodeEncodeError": "#e49627",
+                "UnicodeDecodeError": "#e49627",
+                "UnicodeTranslateError": "#e49627",
+                "UserWarning": "#e49627",
+                "UnicodeWarning": "#e49627",
+                
+                "ValueError": "#e49627",
+                
+                "Warning": "#e49627",
+                "WindowsError": "#e49627",
+                
+                "ZeroDivisionError": "#e49627",
+                
+                
+                #SYMBOLS
+                "%": "#2751b3",
+                #"\n": "yellow", #doesn't work because it is new line character in html? too
+                "%s": "#2751b3",
+            }
+
+
+            # Colors for unknown words following specific keywords
+            keyword_name_colors = {
+                "def": "#dbe726",
+                "class": "#dbe726",
+                "import": "#20ac8b",
+                "as": "#20ac8b",
+                "from": "#20ac8b",
+                "for": "#7ac1cd",
+                "while": "#7ac1cd",
+            }
+            
+
+
+            number_color = "#67f07d"
+            paren_color = "#7ac1cd" #choose a darker color
+            comment_color = "#478353"  # Dark green for comments
+
+
+            #separator_color = "#white" if is_black_background else "black"
+            separator_color = "white" #if is_black_background else "black"
+
+
+
+            word_color_map = {}
+            expecting_keyword_name = None
+
+            # Split text into lines for processing
+            lines = text.split('\n')
+            # Flags for tracking triple quotes
+            in_triple_double_quotes = False
+            in_triple_single_quotes = False
+            for line in lines:
+                i = 0
+                length = len(line)
+                word = []
+                in_double_quote = False
+                in_single_quote = False
+                in_parentheses = False
+                in_comment = False
+
+
+                while i < length:
+                    char = line[i]
+
+
+                    if in_comment:
+                        # Color text in comments
+                        overlay <= html.SPAN(char, style={"color": comment_color})
+                        i += 1
+                        continue
+
+
+                    # Handle triple double quotes (""")
+                    if line[i:i+3] == '"""' and not in_triple_single_quotes:
+                        overlay <= html.SPAN('"""', style={"color": "#cd7246"})
+                        i += 2  # Skip the next two characters
+                        in_triple_double_quotes = not in_triple_double_quotes
+                    
+                    # Handle triple single quotes (''')
+                    elif line[i:i+3] == "'''" and not in_triple_double_quotes:
+                        overlay <= html.SPAN("'''", style={"color": "#cd7246"})
+                        i += 2  # Skip the next two characters
+                        in_triple_single_quotes = not in_triple_single_quotes
+                    
+                    # Handle characters inside triple quotes
+                    elif in_triple_double_quotes or in_triple_single_quotes:
+                        overlay <= html.SPAN(char, style={"color": "#cd7246"})
+
+
+                    elif char == '"' and not in_single_quote:
+                        if in_double_quote:
+                            overlay <= html.SPAN(''.join(word), style={"color": "black"})
+                            overlay <= html.SPAN('"', style={"color": "#cd7246"})
+                        else:
+                            overlay <= html.SPAN(''.join(word), style={"color": "black"})
+                            overlay <= html.SPAN('"', style={"color": "#cd7246"})
+                        word = []
+                        in_double_quote = not in_double_quote
+
+                    elif char == "'" and not in_double_quote:
+                        if in_single_quote:
+                            overlay <= html.SPAN(''.join(word), style={"color": "black"})
+                            overlay <= html.SPAN("'", style={"color": "#cd7246"})
+                        else:
+                            overlay <= html.SPAN(''.join(word), style={"color": "black"})
+                            overlay <= html.SPAN("'", style={"color": "#cd7246"})
+                        word = []
+                        in_single_quote = not in_single_quote
+
+                    elif in_double_quote or in_single_quote:
+                        overlay <= html.SPAN(char, style={"color": "#cd7246"})
+
+
+                    elif char == '#':
+                        # Start of a comment
+                        if word:
+                            # Flush previous word before the comment
+                            word_str = ''.join(word)
+                            if word_str.replace('.', '', 1).isdigit() and word_str.count('.') <= 1:
+                                span = html.SPAN(word_str, style={"color": number_color})
+                            else:
+                                if expecting_keyword_name:
+                                    if word_str not in word_color_map:
+                                        word_color_map[word_str] = keyword_name_colors.get(expecting_keyword_name, "#7ac1cd")
+                                    span = html.SPAN(word_str, style={"color": word_color_map[word_str]})
+                                    expecting_keyword_name = None
+                                elif word_str in word_color_map:
+                                    span = html.SPAN(word_str, style={"color": word_color_map[word_str]})
+                                else:
+                                    color = keywords.get(word_str, "#7ac1cd") 
+                                    span = html.SPAN(word_str, style={"color": color})
+                                    if word_str in keywords:
+                                        expecting_keyword_name = word_str
+                            overlay <= span
+                            word = []
+                        
+                        # Start coloring the comment text
+                        in_comment = True
+                        overlay <= html.SPAN('#', style={"color": comment_color})
+
+
+                    else:
+                        #if char in {' ', '.', '\t', ',', '=', '(', ')', '#', ':', '\n'}:
+                        #if char in {' ', '.', '\t', ',', '=', '(', ')', ':', '\n'}:
+                        if char in {' ', '\n', '\t', '(', ')', '{', '}', '[', ']', '.', ',', ':', ';', '+', '-', '*', '/', '=', '<', '>', '!', '&', '|', '^', '~', '?', '"', "'", '\\'}:
+                            if word:
+                                word_str = ''.join(word)
+                                if word_str.replace('.', '', 1).isdigit() and word_str.count('.') <= 1:
+                                    span = html.SPAN(word_str, style={"color": number_color})
+                                else:
+                                    if expecting_keyword_name:
+                                        if word_str not in word_color_map:
+                                            word_color_map[word_str] = keyword_name_colors.get(expecting_keyword_name, "#7ac1cd")
+                                        span = html.SPAN(word_str, style={"color": word_color_map[word_str]})
+                                        expecting_keyword_name = None
+                                    elif word_str in word_color_map:
+                                        span = html.SPAN(word_str, style={"color": word_color_map[word_str]})
+                                    else:
+                                        color = keywords.get(word_str, "#7ac1cd")
+                                        span = html.SPAN(word_str, style={"color": color})
+                                        if word_str in keywords:
+                                            expecting_keyword_name = word_str
+
+                                overlay <= span
+                                word = []
+
+                            separator_colors = {
+                                ' ': "transparent",
+                                '\t': "transparent",
+                                '\n': "transparent",                                
+                                '.': "#000000"  if  is_black_background else "#ffffff",
+                                ',': "#000000"  if  is_black_background else "#ffffff",
+                                ':': "#000000"  if  is_black_background else "#ffffff",
+                                '(': "#000000"  if  is_black_background else "#ffffff",
+                                ')': "#000000"  if  is_black_background else "#ffffff",
+                                "=": "#000000"  if  is_black_background else "#ffffff",
+                                '{': "#000000"  if  is_black_background else "#ffffff",
+                                '}': "#000000"  if  is_black_background else "#ffffff", 
+                                '[': "#000000"  if  is_black_background else "#ffffff", 
+                                ']': "#000000"  if  is_black_background else "#ffffff", 
+                                ';': "#000000"  if  is_black_background else "#ffffff",  
+                                '+': "#000000"  if  is_black_background else "#ffffff",  
+                                '-' : "#000000"  if  is_black_background else "#ffffff",
+                                '*' : "#000000"  if  is_black_background else "#ffffff",
+                                '/' : "#000000"  if  is_black_background else "#ffffff",
+                                '<' : "#000000"  if  is_black_background else "#ffffff",
+                                '>' : "#000000"  if  is_black_background else "#ffffff",
+                                '!' : "#000000"  if  is_black_background else "#ffffff",
+                                '&' : "#000000"  if  is_black_background else "#ffffff",
+                                '|' : "#000000"  if  is_black_background else "#ffffff",
+                                '^' : "#000000"  if  is_black_background else "#ffffff",
+                                '~' : "#000000"  if  is_black_background else "#ffffff",
+                                '?' : "#000000"  if  is_black_background else "#ffffff",
+                                '\\': "#000000"  if  is_black_background else "#ffffff",                                
+                            }
+                            #, not black when background is white
+                            #everything else only black
+
+
+
+                            if char in separator_colors:
+                                overlay <= html.SPAN(char, style={"color": "#67f07d"})
+
+                            else:
+                                overlay <= html.SPAN(char, style={"color": "#67f07d"})
+                                
+                            if char == '(':
+                                in_parentheses = True
+                            elif char == ')':
+                                in_parentheses = False
+
+                        else:
+                            if in_parentheses:
+                                overlay <= html.SPAN(char, style={"color": paren_color})
+                            else:
+                                word.append(char)
+
+                    i += 1
+
+                if in_comment:
+                    # End of line for comment
+                    in_comment = False
+
+
+                if word:
+                    word_str = ''.join(word)
+                    if word_str.replace('.', '', 1).isdigit() and word_str.count('.') <= 1:
+                        span = html.SPAN(word_str, style={"color": number_color})
+                    else:
+                        if word_str in word_color_map:
+                            color = word_color_map[word_str]
+                        else:
+                            color = keywords.get(word_str, "#7ac1cd")
+                        span = html.SPAN(word_str, style={"color": color})
+                    overlay <= span
+
+                # Add a line break after processing each line
+                overlay <= html.SPAN('<br>', style={"color": "transparent"})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        """
+
+        def set_background_color(color):
+
+            textarea = document['txt_py']
+            line_numbers = document['line-numbers']
+            
+            if color == 'black':
+
+                textarea.style.backgroundColor = '#ffffff'
+                textarea.style.color = '#000000'
+                line_numbers.style.backgroundColor = '#ffffff'
+                line_numbers.style.color = '#000000'
+            elif color == 'gray':
+
+                textarea.style.backgroundColor = '#757575'
+                textarea.style.color = '#000000'
+                line_numbers.style.backgroundColor = '#757575'
+                line_numbers.style.color = '#ffffff'
+        """
+
+        def set_background_color(event):
+            global is_black_background
+            textarea = document['txt_py']
+            line_numbers = document['line-numbers']
+            
+            if is_black_background:
+                textarea.style.backgroundColor = '#1f1f1f'
+                textarea.style.color = '#000000'
+                line_numbers.style.backgroundColor = '#1f1f1f'
+                line_numbers.style.color = '#ffffff'
+            else:
+                textarea.style.backgroundColor = '#ffffff'
+                textarea.style.color = '#000000'
+                line_numbers.style.backgroundColor = '#ffffff'
+                line_numbers.style.color = '#000000'
+            
+            # Toggle the flag
+            is_black_background = not is_black_background
+
+
+
+
+
+
+        def save_text(event):
+            textarea = document["txt_py"]
+            text = textarea.value
+    
+            # Prompt for a file name
+            file_name = window.prompt("Enter the file name:", "text.py")
+            if not file_name:
+                return  # Exit if no file name is provided
+    
+            # Create a Blob with the text content
+            blob = window.Blob.new([text], {"type": "text/plain"})
+            url = window.URL.createObjectURL(blob)
+    
+            # Create a temporary link to trigger the download
+            link = document.createElement('a')
+            link.href = url
+            link.download = file_name  # Use the provided file name
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+
+            # Revoke the object URL after use
+            #window.URL.revokeObjectURL(url)
+
+
+
+            
+
+        def upload_file(event):
+            file_input = document["upload-file"]
+            file = file_input.files[0]
+            reader = window.FileReader.new()
+
+            def on_load(event):
+                textarea = document["txt_py"]
+                textarea.value = reader.result
+                #NOT COMPLETELY RIGHT
+                update_overlay()
+                sync_scroll()
+
+            reader.bind("load", on_load)
+            reader.readAsText(file)
+
+        def sync_scroll(event=None):
+            textarea = document["txt_py"]
+            overlay = document["overlay"]
+            line_numbers = document["line-numbers"]
+
+            overlay.scrollTop = textarea.scrollTop
+            overlay.scrollLeft = textarea.scrollLeft
+            line_numbers.scrollTop = textarea.scrollTop
+
+
+        def go_to_google(event):
+            #window.location.href = "https://www.google.com"
+
+            #window.location.href = "https://colab.research.google.com/"
+            
+            #window.location.href = "http://localhost:5000/run"
+            pass
+
+        def go_to_documents(event):
+            window.location.href = "https://docs.python.org"
+
+        def copy_to_clipboard(event):
+            textarea = document["txt_py"]
+            # Select the text in the textarea
+            textarea.select()
+            # Copy the selected text to the clipboard
+            window.document.execCommand("copy")
+
+
+
+        def toggle_lines(event):
+            textarea = document['txt_py']
+            if "lines-active" in textarea.class_name:
+                textarea.class_name = textarea.class_name.replace(" lines-active", "")
+            else:
+                textarea.class_name += " lines-active"
+
+
+
+
+
+
+        # Bind the update functions to input and scroll events
+        textarea = document['txt_py']
+        textarea.bind('input', update_overlay)
+        textarea.bind('scroll', sync_scroll)
+
+        
+        # Bind the save function to the save button
+        save_button = document['save-button']
+        save_button.bind('click', save_text)
+
+        # Bind the upload function to the file input
+        file_input = document['upload-file']
+        file_input.bind('change', upload_file)
+
+        # Bind color change buttons
+        #document['black-btn'].bind('click', lambda event: set_background_color('black'))
+        #document['gray-btn'].bind('click', lambda event: set_background_color('gray'))
+
+
+        document['toggle-btn'].bind('click', set_background_color)
+        
+        #colabs button
+        document["go-to-google"].bind("click", go_to_google)
+        
+        #documentation button
+        document["go-to-docs"].bind("click", go_to_documents)
+
+        #copy paste button
+        document["copy-button"].bind("click", copy_to_clipboard)
+
+        #setting
+        # Bind the button click event to toggle_lines function
+        document["toggleLines"].bind("click", toggle_lines)
+
+
+
+
+        # Initial calls to set the line numbers and overlay
+        update_overlay()
+        sync_scroll()
+
+
+
+
+
+
+
+
+
+    </script>
+
+
+    <div class="controls">
+
+        <button id="toggle-btn" type="button" class="round-button"></button>
+
+        <button id="save-button" type="button" class=" round-button">
+            <span style='font-size:30px;', color="white">&#8595;</span>
+
+        </button>
+        <input class="round-button" type="file" id="upload-file" accept=".py" style='font-size:0px;' padding="0px" margin="0px">
+
+
+        <!--COPY-PASTE BUTTON-->        
+        <!--
+        <button id="copy-button"type="button" class="round-button" align-items="center">
+            <span style='font-size:19px;' color="white" >&#11034;</span>    
+        </button>
+        -->
+
+
+        <button id="copy-button"type="button" class="round-button" align-items="center" justify-content="center">
+            <span style='font-size:24px;' color="white" >&#10066;</span>   
+
+        </button>
+
+
+        <!--COLABS BUTTON-->
+
+        <button id="go-to-google"type="button" class="round-button">
+            <span style='font-size:40px;' color="white">&#8227;</span>    
+        </button>
+
+        <!--DOCUMENTATION BUTTON-->
+        <!--
+        <button id="go-to-docs"type="button" class="round-button">
+            <span style='font-size:25px;' color="white">&#128214;</span>    
+        </button>
+        -->
+        <button id="go-to-docs" type="button" class="round-button">
+            <span style='font-size:19px;' color="white">&#128196;</span>    
+        </button>
+        
+        <!--  &#128466; -->
+
+        <!-- SETTINGS BUTTON-->
+        <button id="toggleLines" type="button" class="round-button">
+            <span style='font-size:30px;' color="white">&#9788;</span>    
+        </button>
+        
+        <!--&#9784;   &#9881; -->
+    </div>
+
+
+<script>
+document.getElementById('go-to-google').addEventListener('click', () => {
+    const text = document.getElementById('txt_py').value;
+    const outputDiv = document.getElementById('console-output');
+
+    fetch('/submit', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ code: text })
+    })
+    .then(response => response.text())
+    .then(data => {
+        // Append input and output to the console area
+        outputDiv.textContent += `\n> ${data}\n`;
+        outputDiv.scrollTop = outputDiv.scrollHeight;  // auto-scroll to bottom
+    })
+    .catch(error => {
+        outputDiv.textContent += `\n[Error]: ${error.message}`;
+    });
+});
+</script>
+
+
+<div id="console-output" style="
+    white-space: pre-wrap;
+    background: #111;
+    color: #0f0;
+    padding: 10px;
+    height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+"></div>
+
+
+</body>
+</html>
